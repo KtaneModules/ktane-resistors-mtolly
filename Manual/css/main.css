@@ -893,3 +893,7 @@ td, th {
         page-break-after: avoid;
     }
 }
+
+.resistor-table td {
+    text-align: right;
+}
