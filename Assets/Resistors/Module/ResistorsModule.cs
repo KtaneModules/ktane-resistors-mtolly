@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-public class ExampleModule : MonoBehaviour
+public class ResistorsModule : MonoBehaviour
 {
     public KMSelectable[] pins;
     public GameObject[] wires;
