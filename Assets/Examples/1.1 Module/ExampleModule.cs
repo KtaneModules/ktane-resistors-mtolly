@@ -341,7 +341,107 @@ public class ExampleModule : MonoBehaviour
 
     void OnCheck() {
         GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
-        // TODO
+
+        double checking;
+        checking = GetResistance(0, 1);
+        Debug.Log ("[Resistors] A to B resistance is " + checking);
+        if (!RoughEqual(checking, goalResistAB)) {
+            Debug.Log ("[Resistors] Too far from " + goalResistAB);
+            GetComponent<KMBombModule>().HandleStrike();
+            return;
+        }
+        checking = GetResistance(0, 2);
+        Debug.Log ("[Resistors] A to C resistance is " + checking);
+        if (!RoughEqual(checking, goalResistAC)) {
+            Debug.Log ("[Resistors] Too far from " + goalResistAC);
+            GetComponent<KMBombModule>().HandleStrike();
+            return;
+        }
+        checking = GetResistance(0, 3);
+        Debug.Log ("[Resistors] A to D resistance is " + checking);
+        if (!RoughEqual(checking, goalResistAD)) {
+            Debug.Log ("[Resistors] Too far from " + goalResistAD);
+            GetComponent<KMBombModule>().HandleStrike();
+            return;
+        }
+        checking = GetResistance(1, 2);
+        Debug.Log ("[Resistors] B to C resistance is " + checking);
+        if (!RoughEqual(checking, goalResistBC)) {
+            Debug.Log ("[Resistors] Too far from " + goalResistBC);
+            GetComponent<KMBombModule>().HandleStrike();
+            return;
+        }
+        checking = GetResistance(1, 3);
+        Debug.Log ("[Resistors] B to D resistance is " + checking);
+        if (!RoughEqual(checking, goalResistBD)) {
+            Debug.Log ("[Resistors] Too far from " + goalResistBD);
+            GetComponent<KMBombModule>().HandleStrike();
+            return;
+        }
         GetComponent<KMBombModule>().HandlePass();
+    }
+
+    bool RoughEqual(double x, double y) {
+        if (double.IsInfinity(x)) return double.IsInfinity(y);
+        if (double.IsInfinity(y)) return double.IsInfinity(x);
+        return x * 0.95 <= y && y <= x * 1.05;
+    }
+
+    double GetResistance(int startPin, int endPin) {
+        // First, let's see if they are connected via a no-resistor path.
+        HashSet<int> startSCC = GetSCC(startPin);
+        if (startSCC.Contains(endPin)) return 0;
+        HashSet<int> endSCC = GetSCC(endPin);
+
+        // Then, let's try either of the single-resistor paths.
+        double throughPin1 = double.PositiveInfinity;
+        if      (startSCC.Contains(4) && endSCC.Contains(5)) throughPin1 = resistor1;
+        else if (startSCC.Contains(5) && endSCC.Contains(4)) throughPin1 = resistor1;
+        double throughPin2 = double.PositiveInfinity;
+        if      (startSCC.Contains(6) && endSCC.Contains(7)) throughPin2 = resistor2;
+        else if (startSCC.Contains(7) && endSCC.Contains(6)) throughPin2 = resistor2;
+        if (!double.IsInfinity(throughPin1) || !double.IsInfinity(throughPin2)) {
+            // this line relies on careful knowledge of floating point
+            return 1.0 / (1.0 / throughPin1 + 1.0 / throughPin2);
+        }
+
+        // Finally, look for a two-resistor (serial) path.
+        double potentialSerial = resistor1 + resistor2;
+        if (GetSCC(4).Contains(6)) {
+            if (startSCC.Contains(5) && endSCC.Contains(7)) return potentialSerial;
+            if (startSCC.Contains(7) && endSCC.Contains(5)) return potentialSerial;
+        } else if (GetSCC(5).Contains(7)) {
+            if (startSCC.Contains(4) && endSCC.Contains(6)) return potentialSerial;
+            if (startSCC.Contains(6) && endSCC.Contains(4)) return potentialSerial;
+        } else if (GetSCC(4).Contains(7)) {
+            if (startSCC.Contains(5) && endSCC.Contains(6)) return potentialSerial;
+            if (startSCC.Contains(6) && endSCC.Contains(5)) return potentialSerial;
+        } else if (GetSCC(5).Contains(6)) {
+            if (startSCC.Contains(4) && endSCC.Contains(7)) return potentialSerial;
+            if (startSCC.Contains(7) && endSCC.Contains(4)) return potentialSerial;
+        }
+
+        return double.PositiveInfinity;
+    }
+
+    // Returns the set of nodes reachable via 0 resistance from a start pin.
+    HashSet<int> GetSCC(int startPin) {
+        HashSet<int> seen = new HashSet<int>();
+        seen.Add(startPin);
+        while (true) {
+            bool addedSomething = false;
+            for (int i = 0; i < 8; i++) {
+                if (seen.Contains(i)) continue;
+                for (int j = 0; j < 8; j++) {
+                    if (seen.Contains(j) && connections[i, j]) {
+                        seen.Add(i);
+                        addedSomething = true;
+                        break;
+                    }
+                }
+            }
+            if (!addedSomething) break;
+        }
+        return seen;
     }
 }
