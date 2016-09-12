@@ -50,7 +50,17 @@ public class ResistorsModule : MonoBehaviour
 
     double DifferentFrom(double value)
     {
-        return value * 2.0; // TODO randomize this
+        if (Random.Range(0, 10) == 0) {
+            if (value >= 100 && Random.Range(0, 2) == 0) {
+                return value / 10.0; // wrong value has decremented multiplier
+            } else {
+                return value * 10.0; // wrong value has incremented multiplier
+            }
+        } else if (value >= 10 && Random.Range(0, 2) == 0) {
+            return value * (0.25 + Random.value * 0.5); // wrong value is less
+        } else {
+            return value * (1.25 + Random.value * 10.0); // wrong value is greater
+        }
     }
 
     void ActivateModule()
@@ -102,7 +112,7 @@ public class ResistorsModule : MonoBehaviour
         } else {
             targetResistance = int.Parse(serial.Substring(0, 2));
         }
-        for (int i = 0; i < batteries; i++) {
+        for (int i = 0; i < System.Math.Min(batteries, 6); i++) {
             targetResistance *= 10;
         }
 
@@ -152,13 +162,13 @@ public class ResistorsModule : MonoBehaviour
             resistor1 = DifferentFrom (targetResistance);
         } else if (puzzle < 0.9f) {
             // 2 resistors in serial
-            // TODO randomize this
-            resistor1 = targetResistance * 0.4;
+            // First resistor randomly chosen from 15% to 85% of target
+            resistor1 = targetResistance * (0.15 + Random.value * 0.7);
             resistor2 = targetResistance - resistor1;
         } else {
             // 2 resistors in parallel
-            // TODO randomize this
-            resistor1 = targetResistance * 1.5;
+            // First resistor randomly chosen from 120% to 600% of target
+            resistor1 = targetResistance * (1.2 + Random.value * 4.8);
             resistor2 = 1.0 / (1.0 / targetResistance - 1.0 / resistor1);
         }
         Debug.Log ("[Resistors] Top resistor is " + resistor1);
@@ -211,7 +221,7 @@ public class ResistorsModule : MonoBehaviour
                 multiplier++;
             }
         }
-        int display = (int) (resistanceValue / System.Math.Pow (10.0, multiplier));
+        int display = System.Convert.ToInt32(System.Math.Round(resistanceValue / System.Math.Pow (10.0, multiplier)));
         digit1 = display / 10;
         digit2 = display % 10;
 
@@ -384,7 +394,7 @@ public class ResistorsModule : MonoBehaviour
     bool RoughEqual(double x, double y) {
         if (double.IsInfinity(x)) return double.IsInfinity(y);
         if (double.IsInfinity(y)) return double.IsInfinity(x);
-        return x * 0.95 <= y && y <= x * 1.05;
+        return (x * 0.95 <= y && y <= x * 1.05) || (x - 0.1 <= y && y <= x + 0.1);
     }
 
     double GetResistance(int startPin, int endPin) {
@@ -394,15 +404,15 @@ public class ResistorsModule : MonoBehaviour
         HashSet<int> endSCC = GetSCC(endPin);
 
         // Then, let's try either of the single-resistor paths.
-        double throughPin1 = double.PositiveInfinity;
-        if      (startSCC.Contains(4) && endSCC.Contains(5)) throughPin1 = resistor1;
-        else if (startSCC.Contains(5) && endSCC.Contains(4)) throughPin1 = resistor1;
-        double throughPin2 = double.PositiveInfinity;
-        if      (startSCC.Contains(6) && endSCC.Contains(7)) throughPin2 = resistor2;
-        else if (startSCC.Contains(7) && endSCC.Contains(6)) throughPin2 = resistor2;
-        if (!double.IsInfinity(throughPin1) || !double.IsInfinity(throughPin2)) {
+        double throughR1 = double.PositiveInfinity;
+        if      (startSCC.Contains(4) && endSCC.Contains(5)) throughR1 = resistor1;
+        else if (startSCC.Contains(5) && endSCC.Contains(4)) throughR1 = resistor1;
+        double throughR2 = double.PositiveInfinity;
+        if      (startSCC.Contains(6) && endSCC.Contains(7)) throughR2 = resistor2;
+        else if (startSCC.Contains(7) && endSCC.Contains(6)) throughR2 = resistor2;
+        if (!double.IsInfinity(throughR1) || !double.IsInfinity(throughR2)) {
             // this line relies on careful knowledge of floating point
-            return 1.0 / (1.0 / throughPin1 + 1.0 / throughPin2);
+            return 1.0 / (1.0 / throughR1 + 1.0 / throughR2);
         }
 
         // Finally, look for a two-resistor (serial) path.
