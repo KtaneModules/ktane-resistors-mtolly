@@ -22,6 +22,11 @@ public class ResistorsModule : MonoBehaviour
     public KMSelectable checkButton;
     public KMSelectable clearButton;
 
+    private static string previousSerial = "";
+    private static bool bombHasSimpleSolution = false;
+    private static bool bombHasSerialSolution = false;
+    private static bool bombHasParallelSolution = false;
+
     int correctIndex;
     bool isActivated = false;
     bool[,] connections;
@@ -70,6 +75,13 @@ public class ResistorsModule : MonoBehaviour
         KMBombInfo info = GetComponent<KMBombInfo> ();
 
         string serial = JsonConvert.DeserializeObject<Dictionary<string, string>>(info.QueryWidgets (KMBombInfo.QUERYKEY_GET_SERIAL_NUMBER, null)[0])["serial"];
+        if (previousSerial != serial) {
+            // This is the first Resistors on this bomb
+            previousSerial = serial;
+            bombHasSimpleSolution = false;
+            bombHasSerialSolution = false;
+            bombHasParallelSolution = false;
+        }
         List<int> notDigitIndexes = new List<int> ();
         for (int i = 0; i < serial.Length; i++) {
             if (serial [i] < '0' || '9' < serial [i]) {
@@ -151,25 +163,44 @@ public class ResistorsModule : MonoBehaviour
         Debug.Log ("[Resistors] B to C resistance should be " + goalResistBC);
         Debug.Log ("[Resistors] B to D resistance should be " + goalResistBD);
 
+        // Determine what kind of solution we'll use.
+        // Don't repeat a solution type on the bomb,
+        // unless all the types have already been placed.
         float puzzle = Random.value;
-        if (puzzle < 0.3f) {
-            // use resistor 1
-            resistor1 = targetResistance;
-            resistor2 = DifferentFrom (targetResistance);
-        } else if (puzzle < 0.6f) {
-            // use resistor 2
-            resistor2 = targetResistance;
-            resistor1 = DifferentFrom (targetResistance);
-        } else if (puzzle < 0.9f) {
+        bool bombHasAllThree = bombHasSimpleSolution && bombHasSerialSolution && bombHasParallelSolution;
+        float probabilitySimple   = bombHasSimpleSolution   && !bombHasAllThree ? 0 : 6;
+        float probabilitySerial   = bombHasSerialSolution   && !bombHasAllThree ? 0 : 3;
+        float probabilityParallel = bombHasParallelSolution && !bombHasAllThree ? 0 : 1;
+        float probabilityTotal = probabilitySimple + probabilitySerial + probabilityParallel;
+        Debug.Log
+            ( "[Resistors] Already placed the following Resistors solutions on this bomb:"
+            + (bombHasSimpleSolution   ? " simple"   : "")
+            + (bombHasSerialSolution   ? " serial"   : "")
+            + (bombHasParallelSolution ? " parallel" : "")
+            );
+        if (puzzle < probabilitySimple / probabilityTotal) {
+            if (Random.Range(0, 2) == 0) {
+                // use resistor 1
+                resistor1 = targetResistance;
+                resistor2 = DifferentFrom (targetResistance);
+            } else {
+                // use resistor 2
+                resistor2 = targetResistance;
+                resistor1 = DifferentFrom (targetResistance);
+            }
+            bombHasSimpleSolution = true;
+        } else if (puzzle < (probabilitySimple + probabilitySerial) / probabilityTotal) {
             // 2 resistors in serial
             // First resistor randomly chosen from 15% to 85% of target
             resistor1 = targetResistance * (0.15 + Random.value * 0.7);
             resistor2 = targetResistance - resistor1;
+            bombHasSerialSolution = true;
         } else {
             // 2 resistors in parallel
             // First resistor randomly chosen from 120% to 600% of target
             resistor1 = targetResistance * (1.2 + Random.value * 4.8);
             resistor2 = 1.0 / (1.0 / targetResistance - 1.0 / resistor1);
+            bombHasParallelSolution = true;
         }
         Debug.Log ("[Resistors] Top resistor is " + resistor1);
         Debug.Log ("[Resistors] Bottom resistor is " + resistor2);
