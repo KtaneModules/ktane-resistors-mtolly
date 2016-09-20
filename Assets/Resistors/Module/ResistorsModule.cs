@@ -425,7 +425,7 @@ public class ResistorsModule : MonoBehaviour
     bool RoughEqual(double x, double y) {
         if (double.IsInfinity(x)) return double.IsInfinity(y);
         if (double.IsInfinity(y)) return double.IsInfinity(x);
-        return (x * 0.95 <= y && y <= x * 1.05) || (x - 0.1 <= y && y <= x + 0.1);
+        return (x * 0.95 <= y && y <= x * 1.0526315789473684) || (x - 0.1 <= y && y <= x + 0.1);
     }
 
     double GetResistance(int startPin, int endPin) {

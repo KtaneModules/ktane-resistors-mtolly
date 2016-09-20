@@ -13,10 +13,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   WorkshopPublishedFileID: 762873683
   Title: Resistors
-  Description: 'Make the proper wire connections by reading the resistor color codes.
-
-
-    Manual (also included): https://mtolly.github.io/ktane-resistors/Manual/ResistorsManual.html'
+  Description: "Make the proper wire connections by reading the resistor color codes.
+    \n\nManual (also included): https://mtolly.github.io/ktane-resistors/Manual/ResistorsManual.html
+    \n\nModule ID: resistors"
   PreviewImage: {fileID: 2800000, guid: 35925967739ca4eca9c1a08e523cfa02, type: 3}
   Tags:
   - Regular Module
