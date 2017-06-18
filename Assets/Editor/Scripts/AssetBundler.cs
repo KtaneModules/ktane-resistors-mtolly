@@ -64,7 +64,7 @@ public class AssetBundler
     private List<string> scriptPathsToRestore = new List<string>();
     #endregion
 
-    [MenuItem("Keep Talking ModKit/Build AssetBundle", priority = 10)]
+    [MenuItem("Keep Talking ModKit/Build AssetBundle _F6", priority = 10)]
     public static void BuildAllAssetBundles_WithEditorUtility()
     {
         BuildModBundle(false);
@@ -80,7 +80,7 @@ public class AssetBundler
     {
         Debug.LogFormat("Creating \"{0}\" AssetBundle...", BUNDLE_FILENAME);
 
-        if (ModConfig.Instance == null 
+        if (ModConfig.Instance == null
             || ModConfig.ID == ""
             || ModConfig.OutputFolder == "")
         {
@@ -106,6 +106,9 @@ public class AssetBundler
 
             //Change all non-Editor scripts to reference ASSEMBLY_NAME instead of Assembly-CSharp
             bundler.AdjustMonoScripts();
+
+            //Update material info components for future compatibility checks
+            bundler.UpdateMaterialInfo();
 
             //Build the assembly using either MSBuild or Unity EditorUtility methods
             if (useMSBuild)
@@ -187,7 +190,7 @@ public class AssetBundler
 
         //modify the csproj (if needed)
         var csproj = File.ReadAllText("ktanemodkit.CSharp.csproj");
-        csproj = csproj.Replace("<AssemblyName>Assembly-CSharp</AssemblyName>", "<AssemblyName>"+ assemblyName + "</AssemblyName>");
+        csproj = csproj.Replace("<AssemblyName>Assembly-CSharp</AssemblyName>", "<AssemblyName>" + assemblyName + "</AssemblyName>");
         File.WriteAllText("modkithelper.CSharp.csproj", csproj);
 
         string path = "modkithelper.CSharp.csproj";
@@ -274,7 +277,7 @@ public class AssetBundler
 
         //CompilerMessage
         var compilerMessageType = assembly.GetType("UnityEditor.Scripting.Compilers.CompilerMessage");
-        FieldInfo messageField = compilerMessageType.GetField("message"); 
+        FieldInfo messageField = compilerMessageType.GetField("message");
 
         //Start compiling
         beginCompilingMethod.Invoke(monoCompiler, null);
@@ -418,8 +421,8 @@ public class AssetBundler
         //not be accessible within the asset bundle. Unity has deprecated this flag claiming it is now always active, but due to a bug
         //we must still include it (and ignore the warning).
         BuildPipeline.BuildAssetBundles(
-            TEMP_BUILD_FOLDER, 
-            BuildAssetBundleOptions.DeterministicAssetBundle | BuildAssetBundleOptions.CollectDependencies, 
+            TEMP_BUILD_FOLDER,
+            BuildAssetBundleOptions.DeterministicAssetBundle | BuildAssetBundleOptions.CollectDependencies,
             BuildTarget.StandaloneWindows);
 #pragma warning restore 618
 
@@ -572,5 +575,57 @@ public class AssetBundler
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Sets material info for gameobjects that have a material to prevent possible future incompatibility
+    /// </summary>
+    protected void UpdateMaterialInfo()
+    {
+        List<string> supportedShaders = new List<string>
+            {
+                "Legacy Shaders/Diffuse", "Hidden/CubeBlur", "Hidden/CubeCopy", "Hidden/CubeBlend",
+                "UI/Default", "UI/Default Font", "Mobile/Diffuse", "Unlit/Transparent",
+                "Unlit/Transparent Cutout", "Unlit/Color", "Mobile/Unlit (Supports Lightmap)", "Unlit/Texture",
+                "KT/Blend Lit and Unlit", "KT/Blend Lit and Unlit Vertex Color", "KT/Blend Unlit", "GUI/KT 3D Text",
+                "KT/Mobile/Diffuse", "KT/Mobile/DiffuseTint", "KT/Transparent/Mobile Diffuse Underlay200", "KT/Unlit/TexturedLightmap",
+                "KT/Unlit/TransparentVertexColorUnderlay30", "KT/Outline"
+            };
+
+        string[] prefabsGUIDs = AssetDatabase.FindAssets("t: prefab");
+        foreach(string prefabGUID in prefabsGUIDs)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(prefabGUID);
+            GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if(go == null)
+            {
+                continue;
+            }
+            foreach(Renderer renderer in go.GetComponentsInChildren<Renderer>())
+            {
+                if(renderer.sharedMaterials != null && renderer.sharedMaterials.Length > 0)
+                {
+                    if(renderer.gameObject.GetComponent<KMMaterialInfo>() == null)
+                    {
+                        renderer.gameObject.AddComponent<KMMaterialInfo>();
+                    }
+                    KMMaterialInfo materialInfo = renderer.gameObject.GetComponent<KMMaterialInfo>();
+                    materialInfo.ShaderNames = new List<string>();
+                    foreach(Material material in renderer.sharedMaterials)
+                    {
+                        materialInfo.ShaderNames.Add(material.shader.name);
+
+                        if(material.shader.name == "Standard")
+                        {
+                            Debug.LogWarning(string.Format("Use of Standard shader in object {0}. Standard shader should be avoided as it will cause your mod to break in future versions of the game.", renderer.gameObject));
+                        }
+                        else if(!supportedShaders.Contains(material.shader.name))
+                        {
+                            Debug.LogWarning(string.Format("Use of custom shader {0} in object {1}. Use of custom shaders will break mod compatibility on game update requiring rebuild. Recommend using only supported shaders.", material.shader.name, renderer.gameObject));
+                        }
+                    }
+                }
+            }
+        }
     }
 }
