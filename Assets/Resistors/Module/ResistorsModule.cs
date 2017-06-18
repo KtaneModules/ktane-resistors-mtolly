@@ -401,7 +401,8 @@ public class ResistorsModule : MonoBehaviour
 
     void OnClear()
     {
-        GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
+        GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, clearButton.transform);
+        clearButton.AddInteractionPunch();
         for (int i = 0; i < 8; i++)
             for (int j = 0; j < 8; j++)
                 SetWire(i, j, false);
@@ -410,7 +411,8 @@ public class ResistorsModule : MonoBehaviour
 
     void OnCheck()
     {
-        GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
+        GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, checkButton.transform);
+        checkButton.AddInteractionPunch();
 
         if (!isActivated)
         {
