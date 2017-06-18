@@ -1,9 +1,15 @@
-﻿using UnityEngine;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
+using UnityEngine;
+
+using Random = UnityEngine.Random;
 
 public class ResistorsModule : MonoBehaviour
 {
+    public KMBombInfo BombInfo;
+
     public KMSelectable[] pins;
     public GameObject[] wires;
     public MeshRenderer[] bands;
@@ -40,8 +46,12 @@ public class ResistorsModule : MonoBehaviour
     double goalResistBD = double.PositiveInfinity;
     // resistance C-D not checked
 
+    private int moduleId;
+    private static int moduleIdCounter = 1;
+
     void Start()
     {
+        moduleId = moduleIdCounter++;
         for (int i = 0; i < pins.Length; i++)
         {
             int j = i;
@@ -59,31 +69,21 @@ public class ResistorsModule : MonoBehaviour
         if (Random.Range(0, 10) == 0)
         {
             if (value >= 100 && Random.Range(0, 2) == 0)
-            {
                 return value / 10.0; // wrong value has decremented multiplier
-            }
             else
-            {
                 return value * 10.0; // wrong value has incremented multiplier
-            }
         }
         else if (value >= 10 && Random.Range(0, 2) == 0)
-        {
             return value * (0.25 + Random.value * 0.5); // wrong value is less
-        }
         else
-        {
             return value * (1.25 + Random.value * 10.0); // wrong value is greater
-        }
     }
 
     void ActivateModule()
     {
         isActivated = true;
 
-        KMBombInfo info = GetComponent<KMBombInfo>();
-
-        string serial = JsonConvert.DeserializeObject<Dictionary<string, string>>(info.QueryWidgets(KMBombInfo.QUERYKEY_GET_SERIAL_NUMBER, null)[0])["serial"];
+        string serial = JsonConvert.DeserializeObject<Dictionary<string, string>>(BombInfo.QueryWidgets(KMBombInfo.QUERYKEY_GET_SERIAL_NUMBER, null)[0])["serial"];
         if (previousSerial != serial)
         {
             // This is the first Resistors on this bomb
@@ -92,113 +92,83 @@ public class ResistorsModule : MonoBehaviour
             bombHasSerialSolution = false;
             bombHasParallelSolution = false;
         }
-        List<int> notDigitIndexes = new List<int>();
-        for (int i = 0; i < serial.Length; i++)
-        {
-            if (serial[i] < '0' || '9' < serial[i])
-                notDigitIndexes.Insert(0, i);
-        }
-        foreach (int i in notDigitIndexes)
-        {
-            serial = serial.Remove(i, 1);
-        }
-        Debug.Log("[Resistors] Serial number digits are " + serial);
+        serial = string.Join("", serial.Where(ch => ch >= '0' && ch <= '9').Select(ch => ch.ToString()).ToArray());
 
         int batteries = 0;
         bool dcell = false;
-        foreach (string response in info.QueryWidgets(KMBombInfo.QUERYKEY_GET_BATTERIES, null))
+        foreach (string response in BombInfo.QueryWidgets(KMBombInfo.QUERYKEY_GET_BATTERIES, null))
         {
             int bats = JsonConvert.DeserializeObject<Dictionary<string, int>>(response)["numbatteries"];
             batteries += bats;
             if (bats == 1)
                 dcell = true;
         }
-        Debug.Log("[Resistors] " + batteries + " batteries, D cell = " + dcell);
 
         bool litFRK = false;
-        foreach (string response in info.QueryWidgets(KMBombInfo.QUERYKEY_GET_INDICATOR, null))
+        foreach (string response in BombInfo.QueryWidgets(KMBombInfo.QUERYKEY_GET_INDICATOR, null))
         {
             Dictionary<string, string> obj = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
             if (obj["label"] == "FRK" && obj["on"] == "True")
                 litFRK = true;
         }
-        Debug.Log("[Resistors] Lit FRK = " + litFRK);
+        Debug.LogFormat("[Resistors #{0}] {1} batteries, D cell = {2}, lit FRK = {3}", moduleId, batteries, dcell, litFRK);
 
         char firstDigit = serial.Length == 0 ? '0' : serial[0];
         char lastDigit = serial.Length == 0 ? '0' : serial[serial.Length - 1];
         bool primaryInputA = firstDigit == '0' || firstDigit == '2' || firstDigit == '4' || firstDigit == '6' || firstDigit == '8';
         bool primaryOutputC = lastDigit == '0' || lastDigit == '2' || lastDigit == '4' || lastDigit == '6' || lastDigit == '8';
-        int targetResistance;
-        if (serial.Length == 0)
-        {
-            targetResistance = 0;
-        }
-        else if (serial.Length == 1)
-        {
-            targetResistance = int.Parse(serial);
-        }
-        else
-        {
-            targetResistance = int.Parse(serial.Substring(0, 2));
-        }
-        for (int i = 0; i < System.Math.Min(batteries, 6); i++)
-        {
+        var targetResistance =
+            serial.Length == 0 ? 0 :
+            serial.Length == 1 ? int.Parse(serial) :
+            int.Parse(serial.Substring(0, 2));
+
+        for (int i = 0; i < Math.Min(batteries, 6); i++)
             targetResistance *= 10;
-        }
+
+        Debug.LogFormat("[Resistors #{0}] Primary input: {1}, primary output: {2}, target resistance: {3} Ω.", moduleId, primaryInputA ? "A" : "B", primaryOutputC ? "C" : "D", targetResistance);
 
         if (primaryInputA && primaryOutputC)
         {
             goalResistAC = targetResistance;
             if (litFRK)
-            {
                 goalResistAD = targetResistance;
-            }
             else if (dcell)
-            {
                 goalResistBD = 0;
-            }
         }
         else if (primaryInputA && !primaryOutputC)
         {
             goalResistAD = targetResistance;
             if (litFRK)
-            {
                 goalResistAC = targetResistance;
-            }
             else if (dcell)
-            {
                 goalResistBC = 0;
-            }
         }
         else if (!primaryInputA && primaryOutputC)
         {
             goalResistBC = targetResistance;
             if (litFRK)
-            {
                 goalResistBD = targetResistance;
-            }
             else if (dcell)
-            {
                 goalResistAD = 0;
-            }
         }
         else if (!primaryInputA && !primaryOutputC)
         {
             goalResistBD = targetResistance;
             if (litFRK)
-            {
                 goalResistBC = targetResistance;
-            }
             else if (dcell)
-            {
                 goalResistAC = 0;
-            }
         }
-        Debug.Log("[Resistors] A to B resistance should be " + goalResistAB);
-        Debug.Log("[Resistors] A to C resistance should be " + goalResistAC);
-        Debug.Log("[Resistors] A to D resistance should be " + goalResistAD);
-        Debug.Log("[Resistors] B to C resistance should be " + goalResistBC);
-        Debug.Log("[Resistors] B to D resistance should be " + goalResistBD);
+        var logExtra =
+            litFRK ? " and C to D directly (lit FRK rule)" :
+            dcell ? string.Format(" and {0} to {1} directly (D-cell battery rule)", primaryInputA ? "B" : "A", primaryOutputC ? "D" : "C") :
+            "";
+
+        Debug.LogFormat("[Resistors #{0}] A to B should {1}", moduleId, double.IsInfinity(goalResistAB) ? "not be connected" : string.Format("have resistance of {0} Ω", goalResistAB));
+        Debug.LogFormat("[Resistors #{0}] A to C should {1}", moduleId, double.IsInfinity(goalResistAC) ? "not be connected" : string.Format("have resistance of {0} Ω", goalResistAC));
+        Debug.LogFormat("[Resistors #{0}] A to D should {1}", moduleId, double.IsInfinity(goalResistAD) ? "not be connected" : string.Format("have resistance of {0} Ω", goalResistAD));
+        Debug.LogFormat("[Resistors #{0}] B to C should {1}", moduleId, double.IsInfinity(goalResistBC) ? "not be connected" : string.Format("have resistance of {0} Ω", goalResistBC));
+        Debug.LogFormat("[Resistors #{0}] B to D should {1}", moduleId, double.IsInfinity(goalResistBD) ? "not be connected" : string.Format("have resistance of {0} Ω", goalResistBD));
 
         // Determine what kind of solution we'll use.
         // Don't repeat a solution type on the bomb,
@@ -209,12 +179,8 @@ public class ResistorsModule : MonoBehaviour
         float probabilitySerial = bombHasSerialSolution && !bombHasAllThree ? 0 : 3;
         float probabilityParallel = bombHasParallelSolution && !bombHasAllThree ? 0 : 1;
         float probabilityTotal = probabilitySimple + probabilitySerial + probabilityParallel;
-        Debug.Log
-            ("[Resistors] Already placed the following Resistors solutions on this bomb:"
-            + (bombHasSimpleSolution ? " simple" : "")
-            + (bombHasSerialSolution ? " serial" : "")
-            + (bombHasParallelSolution ? " parallel" : "")
-            );
+
+        string logSolution;
         if (puzzle < probabilitySimple / probabilityTotal)
         {
             if (Random.Range(0, 2) == 0)
@@ -222,12 +188,14 @@ public class ResistorsModule : MonoBehaviour
                 // use resistor 1
                 resistor1 = targetResistance;
                 resistor2 = DifferentFrom(targetResistance);
+                logSolution = string.Format("[Resistors #{0}] Possible solution: connect {1} to {2} through top resistor{3}.", moduleId, primaryInputA ? "A" : "B", primaryOutputC ? "C" : "D", logExtra);
             }
             else
             {
                 // use resistor 2
                 resistor2 = targetResistance;
                 resistor1 = DifferentFrom(targetResistance);
+                logSolution = string.Format("[Resistors #{0}] Possible solution: connect {1} to {2} through bottom resistor{3}.", moduleId, primaryInputA ? "A" : "B", primaryOutputC ? "C" : "D", logExtra);
             }
             bombHasSimpleSolution = true;
         }
@@ -238,6 +206,7 @@ public class ResistorsModule : MonoBehaviour
             resistor1 = targetResistance * (0.15 + Random.value * 0.7);
             resistor2 = targetResistance - resistor1;
             bombHasSerialSolution = true;
+            logSolution = string.Format("[Resistors #{0}] Possible solution: connect {1} to {2} in series{3}.", moduleId, primaryInputA ? "A" : "B", primaryOutputC ? "C" : "D", logExtra);
         }
         else
         {
@@ -246,12 +215,12 @@ public class ResistorsModule : MonoBehaviour
             resistor1 = targetResistance * (1.2 + Random.value * 4.8);
             resistor2 = 1.0 / (1.0 / targetResistance - 1.0 / resistor1);
             bombHasParallelSolution = true;
+            logSolution = string.Format("[Resistors #{0}] Possible solution: connect {1} to {2} in parallel{3}.", moduleId, primaryInputA ? "A" : "B", primaryOutputC ? "C" : "D", logExtra);
         }
-        Debug.Log("[Resistors] Top resistor is " + resistor1);
-        Debug.Log("[Resistors] Bottom resistor is " + resistor2);
 
-        DisplayResistor(resistor1, 0, 1, 2, 3, 4);
-        DisplayResistor(resistor2, 5, 6, 7, 8, 9);
+        DisplayResistor(resistor1, 0, 1, 2, 3, 4, "Top resistor");
+        DisplayResistor(resistor2, 5, 6, 7, 8, 9, "Bottom resistor");
+        Debug.Log(logSolution);
     }
 
     Material GetBandMaterial(int index)
@@ -287,7 +256,7 @@ public class ResistorsModule : MonoBehaviour
         }
     }
 
-    void DisplayResistor(double resistanceValue, int i0, int i1, int i2, int i3, int i4)
+    void DisplayResistor(double resistanceValue, int i0, int i1, int i2, int i3, int i4, string resistor)
     {
         int multiplier, digit1, digit2;
         if (resistanceValue < 10)
@@ -299,14 +268,16 @@ public class ResistorsModule : MonoBehaviour
             multiplier = 0;
             while (true)
             {
-                if (resistanceValue < System.Math.Pow(10.0, multiplier + 2))
+                if (resistanceValue < Math.Pow(10.0, multiplier + 2))
                     break;
                 multiplier++;
             }
         }
-        int display = System.Convert.ToInt32(System.Math.Round(resistanceValue / System.Math.Pow(10.0, multiplier)));
+        int display = Convert.ToInt32(Math.Round(resistanceValue / Math.Pow(10.0, multiplier)));
         digit1 = display / 10;
         digit2 = display % 10;
+
+        Debug.LogFormat("[Resistors #{0}] {1} is {2}{3}×10{4} Ω or {5} Ω", moduleId, resistor, digit1, digit2, "⁻¹|⁰|¹|²|³|⁴|⁵|⁶|⁷|⁸|⁹".Split('|')[multiplier + 1], (digit1 * 10 + digit2) * Math.Pow(10, multiplier));
 
         Material toleranceColor = materialGray;
         switch (Random.Range(0, 6))
@@ -350,34 +321,40 @@ public class ResistorsModule : MonoBehaviour
         }
     }
 
+    void setStartedConnecting(int pin)
+    {
+        if (startedConnecting != -1)
+            pins[startedConnecting].GetComponentInChildren<MeshRenderer>().material = materialGold;
+        startedConnecting = pin;
+        if (startedConnecting != -1)
+            pins[startedConnecting].GetComponentInChildren<MeshRenderer>().material = materialWhite;
+    }
+
     void OnPress(int buttonNumber)
     {
         GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
 
         if (!isActivated)
         {
-            Debug.Log("[Resistors] Pressed button before module has been activated!");
+            Debug.LogFormat("[Resistors #{0}] Pressed button before module has been activated. Strike.", moduleId);
             GetComponent<KMBombModule>().HandleStrike();
             return;
         }
 
         if (startedConnecting == -1)
         {
-            startedConnecting = buttonNumber;
-            pins[buttonNumber].GetComponentInChildren<MeshRenderer>().material = materialWhite;
+            setStartedConnecting(buttonNumber);
             return;
         }
 
         SetWire(startedConnecting, buttonNumber, true);
-        startedConnecting = -1;
+        setStartedConnecting(-1);
     }
 
     void SetWire(int point1, int point2, bool isPresent)
     {
-        pins[point1].GetComponentInChildren<MeshRenderer>().material = materialGold;
-        pins[point2].GetComponentInChildren<MeshRenderer>().material = materialGold;
-
-        if (point1 == point2) return;
+        if (point1 == point2)
+            return;
         connections[point1, point2] = isPresent;
         connections[point2, point1] = isPresent;
 
@@ -433,60 +410,56 @@ public class ResistorsModule : MonoBehaviour
     {
         GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
         for (int i = 0; i < 8; i++)
-        {
             for (int j = 0; j < 8; j++)
-            {
                 SetWire(i, j, false);
-            }
-        }
-        startedConnecting = -1;
+        setStartedConnecting(-1);
     }
 
     void OnCheck()
     {
         GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
 
-        double checking;
-        checking = GetResistance(0, 1);
-        Debug.Log("[Resistors] A to B resistance is " + checking);
+        double checking = GetResistance(0, 1);
+        Debug.LogFormat("[Resistors #{0}] A to B resistance is {1}.", moduleId, checking);
         if (!RoughEqual(checking, goalResistAB))
         {
-            Debug.Log("[Resistors] Too far from " + goalResistAB);
+            Debug.LogFormat("[Resistors #{0}] Too far from {1}.", moduleId, goalResistAB);
             GetComponent<KMBombModule>().HandleStrike();
             return;
         }
         checking = GetResistance(0, 2);
-        Debug.Log("[Resistors] A to C resistance is " + checking);
+        Debug.LogFormat("[Resistors #{0}] A to C resistance is {1}.", moduleId, checking);
         if (!RoughEqual(checking, goalResistAC))
         {
-            Debug.Log("[Resistors] Too far from " + goalResistAC);
+            Debug.LogFormat("[Resistors #{0}] Too far from {1}.", moduleId, goalResistAC);
             GetComponent<KMBombModule>().HandleStrike();
             return;
         }
         checking = GetResistance(0, 3);
-        Debug.Log("[Resistors] A to D resistance is " + checking);
+        Debug.LogFormat("[Resistors #{0}] A to D resistance is {1}.", moduleId, checking);
         if (!RoughEqual(checking, goalResistAD))
         {
-            Debug.Log("[Resistors] Too far from " + goalResistAD);
+            Debug.LogFormat("[Resistors #{0}] Too far from {1}.", moduleId, goalResistAD);
             GetComponent<KMBombModule>().HandleStrike();
             return;
         }
         checking = GetResistance(1, 2);
-        Debug.Log("[Resistors] B to C resistance is " + checking);
+        Debug.LogFormat("[Resistors #{0}] B to C resistance is {1}.", moduleId, checking);
         if (!RoughEqual(checking, goalResistBC))
         {
-            Debug.Log("[Resistors] Too far from " + goalResistBC);
+            Debug.LogFormat("[Resistors #{0}] Too far from {1}.", moduleId, goalResistBC);
             GetComponent<KMBombModule>().HandleStrike();
             return;
         }
         checking = GetResistance(1, 3);
-        Debug.Log("[Resistors] B to D resistance is " + checking);
+        Debug.LogFormat("[Resistors #{0}] B to D resistance is {1}.", moduleId, checking);
         if (!RoughEqual(checking, goalResistBD))
         {
-            Debug.Log("[Resistors] Too far from " + goalResistBD);
+            Debug.LogFormat("[Resistors #{0}] Too far from {1}.", moduleId, goalResistBD);
             GetComponent<KMBombModule>().HandleStrike();
             return;
         }
+        Debug.LogFormat("[Resistors #{0}] Module solved.", moduleId, checking);
         GetComponent<KMBombModule>().HandlePass();
     }
 
@@ -513,7 +486,7 @@ public class ResistorsModule : MonoBehaviour
         else if (startSCC.Contains(7) && endSCC.Contains(6)) throughR2 = resistor2;
         if (!double.IsInfinity(throughR1) || !double.IsInfinity(throughR2))
         {
-            // this line relies on careful knowledge of floating point
+            // This formula works when one of the two values is Infinity because 1.0/Infinity == 0.0
             return 1.0 / (1.0 / throughR1 + 1.0 / throughR2);
         }
 
