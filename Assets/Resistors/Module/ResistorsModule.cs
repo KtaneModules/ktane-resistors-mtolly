@@ -66,7 +66,7 @@ public class ResistorsModule : MonoBehaviour
 
     double DifferentFrom(double value)
     {
-        if (Random.Range(0, 10) == 0)
+        if (Random.Range(0, 10) == 0 && value > 0)
         {
             if (value >= 100 && Random.Range(0, 2) == 0)
                 return value / 10.0; // wrong value has decremented multiplier
@@ -76,7 +76,8 @@ public class ResistorsModule : MonoBehaviour
         else if (value >= 10 && Random.Range(0, 2) == 0)
             return value * (0.25 + Random.value * 0.5); // wrong value is less
         else
-            return value * (1.25 + Random.value * 10.0); // wrong value is greater
+            // Wrong value is greater. Also vary the value in case it is zero.
+            return (value + Random.value) * (1.25 + Random.value * 10.0);
     }
 
     void ActivateModule()
@@ -181,7 +182,8 @@ public class ResistorsModule : MonoBehaviour
         float probabilityTotal = probabilitySimple + probabilitySerial + probabilityParallel;
 
         string logSolution;
-        if (puzzle < probabilitySimple / probabilityTotal)
+        // When the target resistance is 0, we can only have the simple solution.
+        if (puzzle < probabilitySimple / probabilityTotal || targetResistance == 0)
         {
             if (Random.Range(0, 2) == 0)
             {
