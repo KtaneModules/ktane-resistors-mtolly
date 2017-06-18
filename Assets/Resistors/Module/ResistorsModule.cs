@@ -273,7 +273,7 @@ public class ResistorsModule : MonoBehaviour
                 multiplier++;
             }
         }
-        int display = Convert.ToInt32(Math.Round(resistanceValue / Math.Pow(10.0, multiplier)));
+        int display = Convert.ToInt32(Math.Floor(resistanceValue / Math.Pow(10.0, multiplier)));
         digit1 = display / 10;
         digit2 = display % 10;
 
