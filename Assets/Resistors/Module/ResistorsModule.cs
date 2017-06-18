@@ -334,13 +334,6 @@ public class ResistorsModule : MonoBehaviour
     {
         GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
 
-        if (!isActivated)
-        {
-            Debug.LogFormat("[Resistors #{0}] Pressed button before module has been activated. Strike.", moduleId);
-            GetComponent<KMBombModule>().HandleStrike();
-            return;
-        }
-
         if (startedConnecting == -1)
         {
             setStartedConnecting(buttonNumber);
@@ -418,6 +411,13 @@ public class ResistorsModule : MonoBehaviour
     void OnCheck()
     {
         GetComponent<KMAudio>().PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, transform);
+
+        if (!isActivated)
+        {
+            Debug.LogFormat("[Resistors #{0}] Pressed button before module has been activated. Strike.", moduleId);
+            GetComponent<KMBombModule>().HandleStrike();
+            return;
+        }
 
         double checking = GetResistance(0, 1);
         Debug.LogFormat("[Resistors #{0}] A to B resistance is {1}.", moduleId, checking);
